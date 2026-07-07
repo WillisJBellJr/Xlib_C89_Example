@@ -17,22 +17,57 @@
 #include <stdio.h>
 #include <string.h>
 
+int launch_variables(int argc, char *argv[]);
+
 int main(int argc, char *argv[])
 {
+
+	if(launch_variables(argc, argv))
+	{
+		return 0;
+	}
+
 	/* basic setup */
 	Display *display;
     Window win;
     XEvent an_event;
     static Atom wm_delete_window;
-
-	int screen_num;
-	int root_window;
-		
-	unsigned int screen_width;
-	unsigned int screen_height;
-
-	int white_pixel;
-	int black_pixel;
+	
+	/* open connection to xserver */
+	display = XOpenDisplay(NULL);
+	if(display == NULL)
+	{
+		fputs("ERROR: Unable to open connection to XServer\n", stderr);
+		return 0;
+	}
+	
+	
+    /* calls the window manager icccm thing */
+	wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
+	
+	/* get all basic information on the server */
+	
+	/* checks the number for the default screen of XServer */
+	int screen_num = DefaultScreen(display);
+	
+	/* makes ID of root window the the assinged default screen */
+	int root_window = RootWindow(display, screen_num);
+	
+	/* find the width of the XServer in int */ /* ps... the book did / 3 */
+	unsigned int screen_width = DisplayWidth(display, screen_num) / 3;
+	
+	/* find the height of the XServer in int */
+	unsigned int screen_height = DisplayHeight(display, screen_num)/ 3;
+	
+	/* less necessary */
+	/* find the value of the white pixel in int */
+	int white_pixel = WhitePixel(display, screen_num);
+	
+	/* find the value of the black pixel in int ALT: 0x9999CC */
+	int black_pixel = BlackPixel(display, screen_num);
+	
+	/* for exiting the loop */
+    int window_running = 1;
     
     /* graphics setup */
     GC gc;   
@@ -44,86 +79,34 @@ int main(int argc, char *argv[])
 	/* font setup */
     XFontStruct *font_info;
     char *font_name = "*-helvetica-*-12-*";
-
-    /* book said its needed */
-    int font_loc_x;
-    int font_loc_y;
-    font_loc_x = 100;
-    font_loc_y = 100;
     
+   	/* less necessary */
+    int font_loc_x = 100;
+    int font_loc_y = 100;
     
-	/* check for other launching variables */
-	if(argc == 2 && strcmp("-v", argv[1]) == 0)
-	{
-		fputs("window VERSION: 0.1\n", stderr);
-		return 0;
-	}	
-
-	if(argc == 2 && strcmp("-t", argv[1]) == 0)
-	{ 
-		fputs("TESTING: ran\n", stderr);
-		return 0;
-	}
-
-	if(argc == 2 && strcmp("-c", argv[1]) == 0)
-	{ 
-		puts("Copyright (C) 2026 Willis Bell <bellwillis426@gmail.com>");
-		puts("");
-		puts("THE SOFTWARE IS PROVIDED ""AS IS"" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS");
-		puts("THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES");
-		puts("WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,");
-		puts("NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE");
-		puts("OR PERFORMANCE OF THIS SOFTWARE.");
-		puts("");
-		return 0;
-	}  
- 
-	if(argc != 1)
-	{
-		puts("usage: [-v -t -c]");
-        	return 0;
-	}
-
-	/* open connection to xserver */
-	display = XOpenDisplay(NULL);
-	if(display == NULL)
-	{
-		fputs("ERROR: Unable to open connection to XServer\n", stderr);
-		return 0;
-	}
-	
-	/* get all basic information on the server */
-	
-	/* checks the number for the default screen of XServer */
-	screen_num = DefaultScreen(display);
-	/* makes ID of root window the the assinged default screen */
-	root_window = RootWindow(display, screen_num);
-	/* find the width of the XServer in int */ /* ps... the book did / 3 */
-	screen_width = DisplayWidth(display, screen_num) / 3;
-	/* find the height of the XServer in int */
-	screen_height = DisplayHeight(display, screen_num)/ 3;
-
-	/* less necessary */
-	/* find the value of the white pixel in int */
-	white_pixel = WhitePixel(display, screen_num);
-	/* find the value of the black pixel in int ALT: 0x9999CC */
-	black_pixel = BlackPixel(display, screen_num);
-
-	/* creates a simple x11 window to appear */
-	win = XCreateSimpleWindow(
+    /* create simple window */
+    win = XCreateSimpleWindow(
 		display, 
 		root_window, 
 		0, 0, 
 		screen_width, screen_height, 
 		0, 
 		white_pixel, black_pixel);
-
+		
+	/* set title of the window */	
+	XStoreName(display, win, "XWindow");
+	
+	/* makes it use the wm to close? */
+	XSetWMProtocols(display, win, &wm_delete_window, 1);
+	
 	/* window has to be initialised befor assignment */
 	gc = XCreateGC(display, win, valuemask, &values);
-	if(gc < 0)
+	if(!gc)
 	{
-		fputs("XCreateGC: \n", stderr);
+		fputs("XCreateGC: failed\n", stderr);
+		return 0;
 	}
+	
 	font_info = XLoadQueryFont(display, font_name);
     if(!font_info)
     {
@@ -136,15 +119,9 @@ int main(int argc, char *argv[])
 	XSetBackground(display, gc, black_pixel);
 	XSetForeground(display, gc, 0x9999CC);
 	
-	/* set title of the window */
-	XStoreName(display, win, "My First x window");
-
 	/* make visable to user */
 	XMapWindow(display, win);
-	/* calls the window manager icccm thing */
-	wm_delete_window = XInternAtom(display, "WM_DELETE_WINDOW", False);
-	/* makes it use the wm to close? */
-	XSetWMProtocols(display, win, &wm_delete_window, 1);
+	
 	/* ensure that its visable */
 	XFlush(display);
 
@@ -152,7 +129,7 @@ int main(int argc, char *argv[])
 	XSelectInput(display, win, ExposureMask | KeyPressMask);
 
 	/* window event loop */
-	while(1)
+	while(window_running == 1)
 	{
 		XNextEvent(display, &an_event);
 		switch(an_event.type)
@@ -175,9 +152,13 @@ int main(int argc, char *argv[])
 				break;
 			case ClientMessage:
 			/* I kinda get how the atom works partially got off stack overflow */
-			/* tells window manager to deal close window and clean up? */
+			/* tells window manager to deal with close window and clean up? */
 				if((Atom)an_event.xclient.data.l[0] == wm_delete_window)
 				{
+					puts("closing loop...");
+					/* breaks loop */
+					window_running = 0;
+					puts("loop broken!");
 					break;
 				}
 				break;
@@ -185,12 +166,52 @@ int main(int argc, char *argv[])
 				break;
 		}
 	}
+	
 	/* loop kicks out logic to clean up and close window */
+	XFreeFont(display, font_info);
 	XFreeGC(display, gc);
 	XSync(display, 0);
 	XUnmapWindow(display, win);
 	XDestroyWindow(display, win);
 	XCloseDisplay(display);
+	puts("disconnected from server");
+	puts("bye bye >:])");
 	return 0;
 }
 
+int launch_variables(int argc, char *argv[])
+{   
+	if(argc == 1)
+	{
+        return 0;
+	}
+	 
+	/* check for other launching variables */
+	if(argc == 2 && strcmp("-v", argv[1]) == 0)
+	{
+		fputs("window VERSION: 0.2\n", stderr);
+		return 1;
+	}	
+
+	if(argc == 2 && strcmp("-t", argv[1]) == 0)
+	{ 
+		fputs("TESTING: ran\n", stderr);
+		return 1;
+	}
+
+	if(argc == 2 && strcmp("-c", argv[1]) == 0)
+	{ 
+		puts("Copyright (C) 2026 Willis Bell <bellwillis426@gmail.com>");
+		puts("");
+		puts("THE SOFTWARE IS PROVIDED ""AS IS"" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS");
+		puts("THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES");
+		puts("WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT,");
+		puts("NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE");
+		puts("OR PERFORMANCE OF THIS SOFTWARE.");
+		puts("");
+		return 1;
+	}  
+ 
+	puts("usage: [-v -t -c]");
+    return 1;
+}
